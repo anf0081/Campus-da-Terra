@@ -1,0 +1,39 @@
+{
+  "name": "book_list_application",
+  "version": "0.0.1",
+  "description": "A book list application that will save the author, title, URL and upvotes from the users",
+  "license": "MIT",
+  "author": "Annika Friese",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "start": "cross-env NODE_ENV=production node index.js",
+    "dev": "cross-env NODE_ENV=development node --watch index.js",
+    "test": "cross-env  NODE_ENV=test node --test",
+    "lint": "eslint .",
+    "seed": "node seed.js",
+    "clear-db": "node scripts/clearDatabase.js",
+    "create-admin": "node scripts/createAdmin.js",
+    "build": "echo 'Backend built successfully'"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cloudinary": "^1.41.3",
+    "cors": "^2.8.5",
+    "cross-env": "^10.0.0",
+    "dotenv": "^17.2.1",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.17.2",
+    "multer": "^2.0.2",
+    "multer-storage-cloudinary": "^4.0.0",
+    "node-ical": "^0.21.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.22.0",
+    "@stylistic/eslint-plugin": "^5.2.3",
+    "eslint": "^9.22.0",
+    "globals": "^16.0.0",
+    "supertest": "^7.1.4"
+  }
+}
