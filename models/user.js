@@ -28,6 +28,10 @@ const userSchema = mongoose.Schema({
     enum: ['user', 'admin', 'tutor'],
     default: 'user'
   },
+  isGAMember: {
+    type: Boolean,
+    default: false
+  },
   books: [
     {
       type: mongoose.Schema.Types.ObjectId,

@@ -38,6 +38,7 @@ loginRouter.post('/', async (request, response) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      isGAMember: user.isGAMember || false,
       id: user._id,
       contactNumber: user.contactNumber,
       parentStreetAddress: user.parentStreetAddress,

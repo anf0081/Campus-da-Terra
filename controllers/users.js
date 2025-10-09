@@ -23,7 +23,7 @@ usersRouter.get('/', userExtractor, async (request, response) => {
 
 
 usersRouter.post('/', async (request, response) => {
-  const { username, name, email, password, role } = request.body
+  const { username, name, email, password, role, isGAMember } = request.body
 
   if (!password || password.length < 3) {
     return response.status(400).json({ error: 'Password must be at least 3 characters long.' })
@@ -55,7 +55,8 @@ usersRouter.post('/', async (request, response) => {
     name,
     email,
     passwordHash,
-    role
+    role,
+    isGAMember: isGAMember || false
   })
 
   try {
@@ -84,6 +85,7 @@ usersRouter.put('/:id', userExtractor, async (request, response) => {
     email,
     password,
     contactNumber,
+    isGAMember,
     parentStreetAddress,
     parentCity,
     parentPostalCode,
@@ -114,6 +116,12 @@ usersRouter.put('/:id', userExtractor, async (request, response) => {
       updateData.passwordHash = await bcrypt.hash(password, saltRounds)
     }
     if (contactNumber !== undefined) updateData.contactNumber = contactNumber
+
+    // Only admin can update GA member status via this endpoint
+    if (isGAMember !== undefined && request.user.role === 'admin') {
+      updateData.isGAMember = isGAMember
+    }
+
     if (parentStreetAddress !== undefined) updateData.parentStreetAddress = parentStreetAddress
     if (parentCity !== undefined) updateData.parentCity = parentCity
     if (parentPostalCode !== undefined) updateData.parentPostalCode = parentPostalCode
@@ -174,6 +182,90 @@ usersRouter.delete('/:id', userExtractor, async (request, response) => {
   }
 })
 
+// Admin-only endpoint to update user role
+usersRouter.put('/:id/role', userExtractor, async (request, response) => {
+  try {
+    if (request.user.role !== 'admin') {
+      return response.status(403).json({ error: 'Access denied. Admin required.' })
+    }
+
+    const { role } = request.body
+    if (!role) {
+      return response.status(400).json({ error: 'Role is required' })
+    }
+
+    const validRoles = ['user', 'admin', 'tutor']
+    if (!validRoles.includes(role)) {
+      return response.status(400).json({ error: `Invalid role. Valid roles are: ${validRoles.join(', ')}` })
+    }
+
+    const user = await User.findById(request.params.id)
+    if (!user) {
+      return response.status(404).json({ error: 'User not found' })
+    }
+
+    // Prevent removing the last admin
+    if (user.role === 'admin' && role !== 'admin') {
+      const adminCount = await User.countDocuments({ role: 'admin' })
+      if (adminCount <= 1) {
+        return response.status(400).json({ error: 'Cannot remove the last admin from the system' })
+      }
+    }
+
+    // Prevent admin from changing their own role
+    if (request.user._id.toString() === request.params.id && role !== user.role) {
+      return response.status(400).json({ error: 'Cannot change your own role' })
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      request.params.id,
+      { role },
+      { new: true, runValidators: true }
+    ).populate('books', { url: 1, title: 1, author: 1 })
+     .populate('students')
+
+    response.json(updatedUser)
+  } catch (error) {
+    if (error.kind === 'ObjectId') {
+      return response.status(400).json({ error: 'Invalid user ID' })
+    }
+    response.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Admin-only endpoint to toggle GA member status
+usersRouter.put('/:id/ga-member', userExtractor, async (request, response) => {
+  try {
+    if (request.user.role !== 'admin') {
+      return response.status(403).json({ error: 'Access denied. Admin required.' })
+    }
+
+    const { isGAMember } = request.body
+    if (typeof isGAMember !== 'boolean') {
+      return response.status(400).json({ error: 'isGAMember must be a boolean value' })
+    }
+
+    const user = await User.findById(request.params.id)
+    if (!user) {
+      return response.status(404).json({ error: 'User not found' })
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      request.params.id,
+      { isGAMember },
+      { new: true, runValidators: true }
+    ).populate('books', { url: 1, title: 1, author: 1 })
+     .populate('students')
+
+    response.json(updatedUser)
+  } catch (error) {
+    if (error.kind === 'ObjectId') {
+      return response.status(400).json({ error: 'Invalid user ID' })
+    }
+    response.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 usersRouter.get('/template', userExtractor, async (request, response) => {
   try {
     if (request.user.role !== 'admin') {
@@ -182,7 +274,8 @@ usersRouter.get('/template', userExtractor, async (request, response) => {
 
     const template = {
       _documentation: {
-        role: ['user', 'admin', 'tutor']
+        role: ['user', 'admin', 'tutor'],
+        isGAMember: 'boolean - true if user is a General Assembly member'
       },
       username: '',
       password: '',
@@ -218,6 +311,7 @@ usersRouter.get('/template-with-students', userExtractor, async (request, respon
     const template = {
       _documentation: {
         'user.role': ['user', 'admin', 'tutor'],
+        'user.isGAMember': 'boolean - true if user is a General Assembly member',
         'students[].gender': ['Male', 'Female', 'Other'],
         'students[].enrollmentLength': ['6 months (Residents)', '1 year (Residents)', 'Multiple years (Residents)', '1 month (Traveling family)', '2 months (Traveling Family)', '3 months (Traveling Family)'],
         'students[].weekdayAttendance': ['1 day/week', '2 days/week', '3 days/week', '4 days/week', '5 days/week'],
