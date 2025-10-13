@@ -117,7 +117,6 @@ usersRouter.put('/:id', userExtractor, async (request, response) => {
     }
     if (contactNumber !== undefined) updateData.contactNumber = contactNumber
 
-    // Only admin can update GA member status via this endpoint
     if (isGAMember !== undefined && request.user.role === 'admin') {
       updateData.isGAMember = isGAMember
     }
@@ -182,7 +181,6 @@ usersRouter.delete('/:id', userExtractor, async (request, response) => {
   }
 })
 
-// Admin-only endpoint to update user role
 usersRouter.put('/:id/role', userExtractor, async (request, response) => {
   try {
     if (request.user.role !== 'admin') {
@@ -204,7 +202,6 @@ usersRouter.put('/:id/role', userExtractor, async (request, response) => {
       return response.status(404).json({ error: 'User not found' })
     }
 
-    // Prevent removing the last admin
     if (user.role === 'admin' && role !== 'admin') {
       const adminCount = await User.countDocuments({ role: 'admin' })
       if (adminCount <= 1) {
@@ -212,7 +209,6 @@ usersRouter.put('/:id/role', userExtractor, async (request, response) => {
       }
     }
 
-    // Prevent admin from changing their own role
     if (request.user._id.toString() === request.params.id && role !== user.role) {
       return response.status(400).json({ error: 'Cannot change your own role' })
     }
@@ -221,8 +217,7 @@ usersRouter.put('/:id/role', userExtractor, async (request, response) => {
       request.params.id,
       { role },
       { new: true, runValidators: true }
-    ).populate('books', { url: 1, title: 1, author: 1 })
-     .populate('students')
+    ).populate('books', { url: 1, title: 1, author: 1 }).populate('students')
 
     response.json(updatedUser)
   } catch (error) {
@@ -233,7 +228,6 @@ usersRouter.put('/:id/role', userExtractor, async (request, response) => {
   }
 })
 
-// Admin-only endpoint to toggle GA member status
 usersRouter.put('/:id/ga-member', userExtractor, async (request, response) => {
   try {
     if (request.user.role !== 'admin') {
@@ -254,8 +248,7 @@ usersRouter.put('/:id/ga-member', userExtractor, async (request, response) => {
       request.params.id,
       { isGAMember },
       { new: true, runValidators: true }
-    ).populate('books', { url: 1, title: 1, author: 1 })
-     .populate('students')
+    ).populate('books', { url: 1, title: 1, author: 1 }).populate('students')
 
     response.json(updatedUser)
   } catch (error) {

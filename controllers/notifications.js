@@ -79,7 +79,7 @@ router.get('/', userExtractor, async (req, res) => {
       .populate('createdBy', 'username role')
       .populate('targetStudents', 'firstName lastName')
       .sort({ createdAt: -1 })
-      .limit(50) // Limit to 50 most recent notifications
+      .limit(50)
 
     res.json(notifications || [])
   } catch {

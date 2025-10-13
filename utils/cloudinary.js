@@ -61,6 +61,30 @@ const documentStorage = new CloudinaryStorage({
   }
 })
 
+const gaDocumentStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'cdt-ga-documents',
+    type: 'private',
+    resource_type: (_req, file) => {
+      return file.mimetype.startsWith('image/') ? 'image' : 'raw'
+    },
+    public_id: (_req, _file) => generateSecureFilename('ga-document'),
+    format: (_req, file) => {
+      if (file.mimetype === 'application/pdf') {
+        return 'pdf'
+      }
+      if (file.mimetype === 'application/msword') {
+        return 'doc'
+      }
+      if (file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        return 'docx'
+      }
+      return undefined
+    }
+  }
+})
+
 const invoiceStorage = new CloudinaryStorage({
   cloudinary,
   params: {
@@ -115,6 +139,33 @@ const uploadPortfolio = multer({
 
 const uploadDocument = multer({
   storage: documentStorage,
+  limits: {
+    fileSize: 10 * 1024 * 1024
+  },
+  fileFilter: (_req, file, cb) => {
+    const allowedExtensions = /\.(pdf|doc|docx|jpg|jpeg|png)$/i
+    const extname = allowedExtensions.test(file.originalname)
+
+    const allowedMimeTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'image/jpeg',
+      'image/jpg',
+      'image/png'
+    ]
+    const mimetype = allowedMimeTypes.includes(file.mimetype)
+
+    if (mimetype && extname) {
+      cb(null, true)
+    } else {
+      cb(new Error('Only PDF, DOC, DOCX, JPG, JPEG, PNG files are allowed'), false)
+    }
+  }
+})
+
+const uploadGADocument = multer({
+  storage: gaDocumentStorage,
   limits: {
     fileSize: 10 * 1024 * 1024
   },
@@ -316,7 +367,7 @@ const getSignedUrl = (publicId, options = {}) => {
     const baseConfig = {
       type: 'private',
       sign_url: true,
-      secure: true, // Force HTTPS URLs
+      secure: true,
       expires_at: Math.round(Date.now() / 1000) + (options.expiresIn || 3600),
       ...options
     }
@@ -557,6 +608,7 @@ module.exports = {
   uploadProfilePicture,
   uploadPortfolio,
   uploadDocument,
+  uploadGADocument,
   uploadInvoice,
   deleteFileByUrl,
   deleteFileByPublicId,

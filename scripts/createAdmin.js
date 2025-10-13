@@ -24,7 +24,7 @@ const createAdmin = async () => {
       role: 'admin'
     }
 
-    const password = 'admin123' // You should change this!
+    const password = 'admin123'
     const saltRounds = 10
     const passwordHash = await bcrypt.hash(password, saltRounds)
 

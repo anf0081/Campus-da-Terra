@@ -10,7 +10,6 @@ const {
   getDownloadUrl
 } = require('../utils/cloudinary')
 
-// Get all GA document sections (accessible to GA members and admins)
 gaDocumentsRouter.get('/', userExtractor, async (request, response) => {
   try {
     if (request.user.role !== 'admin' && !request.user.isGAMember) {
@@ -29,7 +28,6 @@ gaDocumentsRouter.get('/', userExtractor, async (request, response) => {
   }
 })
 
-// Create new GA document section (admin only)
 gaDocumentsRouter.post('/', userExtractor, async (request, response) => {
   try {
     if (request.user.role !== 'admin') {
@@ -59,7 +57,6 @@ gaDocumentsRouter.post('/', userExtractor, async (request, response) => {
   }
 })
 
-// Update GA document section (admin only)
 gaDocumentsRouter.put('/:id', userExtractor, async (request, response) => {
   try {
     if (request.user.role !== 'admin') {
@@ -90,7 +87,6 @@ gaDocumentsRouter.put('/:id', userExtractor, async (request, response) => {
   }
 })
 
-// Delete GA document section (admin only)
 gaDocumentsRouter.delete('/:id', userExtractor, async (request, response) => {
   try {
     if (request.user.role !== 'admin') {
@@ -102,9 +98,7 @@ gaDocumentsRouter.delete('/:id', userExtractor, async (request, response) => {
       return response.status(404).json({ error: 'GA document section not found' })
     }
 
-    // Delete all files associated with this section
     for (const doc of document.documents) {
-      // Delete admin files
       if (doc.fileUrl && !doc.documentUrl) {
         try {
           await deleteFileByUrl(doc.fileUrl, doc.fileName)
@@ -112,7 +106,6 @@ gaDocumentsRouter.delete('/:id', userExtractor, async (request, response) => {
           // Ignore file deletion errors
         }
       }
-      // Delete user uploaded files
       if (doc.userUploads && doc.userUploads.length > 0) {
         for (const userUpload of doc.userUploads) {
           if (userUpload.fileUrl) {
@@ -137,7 +130,6 @@ gaDocumentsRouter.delete('/:id', userExtractor, async (request, response) => {
   }
 })
 
-// Add file document (admin only)
 gaDocumentsRouter.post('/:id/files', userExtractor, uploadGADocument.single('document'), async (request, response) => {
   try {
     if (request.user.role !== 'admin') {
@@ -182,7 +174,6 @@ gaDocumentsRouter.post('/:id/files', userExtractor, uploadGADocument.single('doc
   }
 })
 
-// Add URL document (admin only)
 gaDocumentsRouter.post('/:id/urls', userExtractor, async (request, response) => {
   try {
     if (request.user.role !== 'admin') {
@@ -226,7 +217,6 @@ gaDocumentsRouter.post('/:id/urls', userExtractor, async (request, response) => 
   }
 })
 
-// Add text content (admin only)
 gaDocumentsRouter.post('/:id/text', userExtractor, async (request, response) => {
   try {
     if (request.user.role !== 'admin') {
@@ -264,7 +254,6 @@ gaDocumentsRouter.post('/:id/text', userExtractor, async (request, response) => 
   }
 })
 
-// Add user upload area (admin only)
 gaDocumentsRouter.post('/:id/upload-area', userExtractor, async (request, response) => {
   try {
     if (request.user.role !== 'admin') {
@@ -304,7 +293,6 @@ gaDocumentsRouter.post('/:id/upload-area', userExtractor, async (request, respon
   }
 })
 
-// User upload to upload area (GA members only)
 gaDocumentsRouter.post('/:id/documents/:docId/user-upload', userExtractor, uploadGADocument.single('document'), async (request, response) => {
   try {
     if (!request.user.isGAMember && request.user.role !== 'admin') {
@@ -354,7 +342,6 @@ gaDocumentsRouter.post('/:id/documents/:docId/user-upload', userExtractor, uploa
   }
 })
 
-// Delete document (admin only)
 gaDocumentsRouter.delete('/:id/documents/:docId', userExtractor, async (request, response) => {
   try {
     if (request.user.role !== 'admin') {
@@ -371,7 +358,6 @@ gaDocumentsRouter.delete('/:id/documents/:docId', userExtractor, async (request,
       return response.status(404).json({ error: 'Document not found' })
     }
 
-    // Delete associated files
     if (docItem.fileUrl && !docItem.documentUrl) {
       try {
         if (docItem.cloudinaryPublicId) {
@@ -384,7 +370,6 @@ gaDocumentsRouter.delete('/:id/documents/:docId', userExtractor, async (request,
       }
     }
 
-    // Delete user uploaded files if it's an upload area
     if (docItem.userUploads && docItem.userUploads.length > 0) {
       for (const userUpload of docItem.userUploads) {
         if (userUpload.fileUrl) {
@@ -415,7 +400,6 @@ gaDocumentsRouter.delete('/:id/documents/:docId', userExtractor, async (request,
   }
 })
 
-// Delete user upload (admin or the user who uploaded it)
 gaDocumentsRouter.delete('/:id/documents/:docId/user-uploads/:uploadId', userExtractor, async (request, response) => {
   try {
     const document = await GADocument.findById(request.params.id)
@@ -433,12 +417,10 @@ gaDocumentsRouter.delete('/:id/documents/:docId/user-uploads/:uploadId', userExt
       return response.status(404).json({ error: 'User upload not found' })
     }
 
-    // Check if user can delete this upload (admin or the uploader)
     if (request.user.role !== 'admin' && userUpload.uploadedBy.toString() !== request.user._id.toString()) {
       return response.status(403).json({ error: 'Access denied. You can only delete your own uploads.' })
     }
 
-    // Delete the file from storage
     if (userUpload.fileUrl) {
       try {
         if (userUpload.cloudinaryPublicId) {
@@ -465,7 +447,6 @@ gaDocumentsRouter.delete('/:id/documents/:docId/user-uploads/:uploadId', userExt
   }
 })
 
-// Get file URL (for downloads)
 gaDocumentsRouter.get('/:id/documents/:docId/url', userExtractor, async (request, response) => {
   try {
     if (request.user.role !== 'admin' && !request.user.isGAMember) {
@@ -517,7 +498,6 @@ gaDocumentsRouter.get('/:id/documents/:docId/url', userExtractor, async (request
   }
 })
 
-// Get user upload file URL
 gaDocumentsRouter.get('/:id/documents/:docId/user-uploads/:uploadId/url', userExtractor, async (request, response) => {
   try {
     if (request.user.role !== 'admin' && !request.user.isGAMember) {

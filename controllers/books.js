@@ -10,10 +10,8 @@ booksRouter.get('/', async (request, response) => {
     const limit = parseInt(request.query.limit) || 18
     const skip = (page - 1) * limit
 
-    // Build filter query based on search parameters
     const filterQuery = {}
 
-    // Search term - search in title and author
     if (request.query.search) {
       const searchRegex = new RegExp(request.query.search, 'i')
       filterQuery.$or = [
@@ -22,18 +20,15 @@ booksRouter.get('/', async (request, response) => {
       ]
     }
 
-    // Language filter
     if (request.query.language) {
       filterQuery.language = request.query.language
     }
 
-    // Difficulty filter
     if (request.query.difficulty) {
       filterQuery.difficulty = request.query.difficulty
     }
 
-    // Build sort object
-    let sortQuery = { title: 1 } // Default sort by title A-Z
+    let sortQuery = { title: 1 }
 
     if (request.query.sort) {
       switch (request.query.sort) {
@@ -50,12 +45,10 @@ booksRouter.get('/', async (request, response) => {
           sortQuery = { author: -1 }
           break
         case 'difficulty-asc':
-          // Custom sort for difficulty levels (Learning to Read → Expert)
-          sortQuery = { title: 1 } // Will sort after aggregation
+          sortQuery = { title: 1 }
           break
         case 'difficulty-desc':
-          // Custom sort for difficulty levels (Expert → Learning to Read)
-          sortQuery = { title: 1 } // Will sort after aggregation
+          sortQuery = { title: 1 }
           break
         default:
           sortQuery = { title: 1 }
@@ -66,7 +59,6 @@ booksRouter.get('/', async (request, response) => {
 
     let books
     if (request.query.sort && (request.query.sort === 'difficulty-asc' || request.query.sort === 'difficulty-desc')) {
-      // Custom difficulty sorting using aggregation
       const sortDirection = request.query.sort === 'difficulty-asc' ? 1 : -1
 
       books = await Book.aggregate([
@@ -92,7 +84,6 @@ booksRouter.get('/', async (request, response) => {
         { $limit: limit }
       ])
 
-      // Populate manually for aggregated results
       await Book.populate(books, [
         { path: 'user', select: 'username name' },
         { path: 'lending.borrower', select: 'username name' }
@@ -289,6 +280,25 @@ booksRouter.put('/:id/return', userExtractor, async (request, response) => {
     return response.status(403).json({ error: 'Unauthorized: only the borrower or an admin can return this book' })
   }
 
+  if (isBorrower && !isAdminOrTutor) {
+    book.lending.returnRequested = true
+    book.lending.returnRequestDate = new Date()
+
+    const savedBook = await book.save()
+    await savedBook.populate('user', { username: 1, name: 1 })
+    await savedBook.populate('lending.borrower', { username: 1, name: 1 })
+
+    const User = require('../models/user')
+    for (let historyEntry of savedBook.lendingHistory) {
+      if (historyEntry.borrower) {
+        const borrowerUser = await User.findById(historyEntry.borrower).select('username name')
+        historyEntry.borrower = borrowerUser
+      }
+    }
+
+    return response.json(savedBook)
+  }
+
   const borrowerId = book.lending.borrower
 
   const currentHistoryEntry = book.lendingHistory.find(
@@ -304,7 +314,67 @@ booksRouter.put('/:id/return', userExtractor, async (request, response) => {
     isLent: false,
     borrower: null,
     lentDate: null,
-    dueDate: null
+    dueDate: null,
+    returnRequested: false,
+    returnRequestDate: null
+  }
+
+  const savedBook = await book.save()
+
+  const User = require('../models/user')
+  for (let historyEntry of savedBook.lendingHistory) {
+    if (historyEntry.borrower) {
+      const borrowerUser = await User.findById(historyEntry.borrower).select('username name')
+      historyEntry.borrower = borrowerUser
+    }
+  }
+
+  response.json(savedBook)
+})
+
+booksRouter.put('/:id/return-request/:action', userExtractor, async (request, response) => {
+  const { action } = request.params
+
+  if (!request.user || (request.user.role !== 'admin' && request.user.role !== 'tutor')) {
+    return response.status(403).json({ error: 'Only admins and tutors can approve/deny return requests' })
+  }
+
+  if (action !== 'approve' && action !== 'deny') {
+    return response.status(400).json({ error: 'Action must be "approve" or "deny"' })
+  }
+
+  const book = await Book.findById(request.params.id)
+  if (!book) {
+    return response.status(404).json({ error: 'Book not found' })
+  }
+
+  if (!book.lending.isLent || !book.lending.returnRequested) {
+    return response.status(400).json({ error: 'No return request found for this book' })
+  }
+
+  if (action === 'approve') {
+    const borrowerId = book.lending.borrower
+
+    const currentHistoryEntry = book.lendingHistory.find(
+      entry => entry.borrower.toString() === borrowerId.toString() && !entry.isReturned
+    )
+
+    if (currentHistoryEntry) {
+      currentHistoryEntry.returnedDate = new Date()
+      currentHistoryEntry.isReturned = true
+    }
+
+    book.lending = {
+      isLent: false,
+      borrower: null,
+      lentDate: null,
+      dueDate: null,
+      returnRequested: false,
+      returnRequestDate: null
+    }
+  } else {
+    book.lending.returnRequested = false
+    book.lending.returnRequestDate = null
   }
 
   const savedBook = await book.save()
@@ -476,7 +546,6 @@ booksRouter.post('/import', userExtractor, async (req, res) => {
   }
 })
 
-// Get unique languages from books
 booksRouter.get('/languages', async (request, response) => {
   try {
     const languages = await Book.distinct('language', { language: { $ne: '', $exists: true } })

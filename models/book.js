@@ -33,6 +33,14 @@ const bookSchema = mongoose.Schema({
     dueDate: {
       type: Date,
       default: null
+    },
+    returnRequested: {
+      type: Boolean,
+      default: false
+    },
+    returnRequestDate: {
+      type: Date,
+      default: null
     }
   },
   lendingHistory: [{

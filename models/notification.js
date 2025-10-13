@@ -44,7 +44,6 @@ const notificationSchema = new mongoose.Schema({
   }
 })
 
-// Index for efficient querying
 notificationSchema.index({ createdAt: -1 })
 notificationSchema.index({ targetType: 1 })
 notificationSchema.index({ targetStudents: 1 })

@@ -14,7 +14,6 @@ const tokenExtractor = (request, response, next) => {
 
 const userExtractor = async (request, response, next) => {
   try {
-    // Try to get token from Authorization header first, then from query params
     let token = request.get('authorization')?.replace('Bearer ', '')
     if (!token && request.query.token) {
       token = request.query.token

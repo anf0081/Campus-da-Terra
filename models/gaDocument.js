@@ -15,7 +15,6 @@ const gaDocumentSchema = new mongoose.Schema({
       type: String,
       required: true
     },
-    // For admin-uploaded files
     fileName: {
       type: String,
       required: false
@@ -31,7 +30,6 @@ const gaDocumentSchema = new mongoose.Schema({
       type: String,
       required: false
     },
-    // For Title+Text content (admin-created, non-editable by users)
     contentType: {
       type: String,
       enum: ['file', 'text', 'upload_area'],
@@ -41,7 +39,6 @@ const gaDocumentSchema = new mongoose.Schema({
       type: String,
       maxLength: 5000
     },
-    // For user upload areas
     allowUserUploads: {
       type: Boolean,
       default: false

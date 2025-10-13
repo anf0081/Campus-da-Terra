@@ -346,8 +346,6 @@ const mergeStudentData = (existingStudent, incomingStudent, strategy = 'prefer-i
   const incomingDashboard = cleanIncoming.dashboard
   delete cleanIncoming.dashboard
 
-  // userId is handled separately - no additional processing needed here
-
   let merged
   switch (strategy) {
     case 'replace':
@@ -946,7 +944,6 @@ const importAllData = async (backupData, options = {}, models = {}) => {
                   cleanSignup.userName = user.name || user.username
                   validSignups.push(cleanSignup)
                 }
-                // Skip invalid user IDs - they will be filtered out
               }
             }
             cleanData.signups = validSignups
