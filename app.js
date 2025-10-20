@@ -25,10 +25,10 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       imgSrc: ["'self'", 'data:', 'https:', 'http:', 'res.cloudinary.com'],
       connectSrc: ["'self'", 'https://res.cloudinary.com', 'https://api.cloudinary.com'],
-      fontSrc: ["'self'", 'data:'],
+      fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
       frameSrc: ["'none'"],
