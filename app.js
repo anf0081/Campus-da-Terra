@@ -26,8 +26,8 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", 'data:', 'https:', 'http:'],
-      connectSrc: ["'self'"],
+      imgSrc: ["'self'", 'data:', 'https:', 'http:', 'res.cloudinary.com'],
+      connectSrc: ["'self'", 'https://res.cloudinary.com', 'https://api.cloudinary.com'],
       fontSrc: ["'self'", 'data:'],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
@@ -35,6 +35,7 @@ app.use(helmet({
     },
   },
   crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" },
 }))
 
 app.use(express.json())
@@ -90,7 +91,8 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'))
 })
 
-app.get(/^(?!\/api).*/, (req, res) => {
+// Catch-all route for SPA - but exclude /api and /assets routes
+app.get(/^(?!\/api|\/assets).*/, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'))
 })
 
