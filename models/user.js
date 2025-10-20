@@ -58,6 +58,25 @@ const userSchema = mongoose.Schema({
   emergencyContactRelationship: String,
   emergencyContactName: String,
   emergencyContactNumber: String,
+
+  emailNotifications: {
+    type: Boolean,
+    default: true
+  },
+
+  isArchived: {
+    type: Boolean,
+    default: false
+  },
+
+  loginAttempts: {
+    type: Number,
+    default: 0
+  },
+
+  lockUntil: {
+    type: Date
+  }
 })
 
 userSchema.set('toJSON', {

@@ -2,11 +2,13 @@ const express = require('express')
 const router = express.Router()
 const Notification = require('../models/notification')
 const Student = require('../models/student')
+const User = require('../models/user')
 const { userExtractor } = require('../utils/middleware')
 const multer = require('multer')
 const { v2: cloudinary } = require('cloudinary')
 const { getPublicIdFromUrl, getDownloadUrl, getSignedDocumentUrlWithType, deleteFileByUrl, deleteFileByPublicId } = require('../utils/cloudinary')
 const { exportNotifications } = require('../utils/dataExport')
+const { sendNotificationEmail } = require('../utils/emailService')
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -163,6 +165,12 @@ router.post('/', userExtractor, upload.single('attachment'), async (req, res) =>
 
     await notification.populate('createdBy', 'username role')
     await notification.populate('targetStudents', 'firstName lastName')
+
+    // Send email notifications asynchronously (don't wait for completion)
+    sendNotificationEmails(notification, targetType, validatedTargetStudents).catch(error => {
+      console.error('Error sending notification emails:', error)
+      // Don't fail the request if email sending fails
+    })
 
     res.status(201).json(notification)
   } catch {
@@ -389,5 +397,50 @@ router.post('/import', userExtractor, async (req, res) => {
     res.status(500).json({ error: 'Internal server error' })
   }
 })
+
+/**
+ * Helper function to send notification emails to appropriate recipients
+ */
+async function sendNotificationEmails(notification, targetType, targetStudentIds) {
+  try {
+    let recipientEmails = []
+
+    if (targetType === 'public') {
+      // Send to all users with email addresses who have email notifications enabled
+      const users = await User.find({
+        email: { $exists: true, $ne: '' },
+        emailNotifications: { $ne: false }
+      }).select('email')
+      recipientEmails = users.map(u => u.email)
+    } else if (targetType === 'student-specific' && targetStudentIds.length > 0) {
+      // Find students and get their parent user emails (only if notifications enabled)
+      const students = await Student.find({ _id: { $in: targetStudentIds } }).populate('userId', 'email emailNotifications')
+      recipientEmails = students
+        .filter(s => s.userId && s.userId.emailNotifications !== false)
+        .map(s => s.userId.email)
+        .filter(email => email && email !== '')
+    }
+
+    if (recipientEmails.length === 0) {
+      console.log('No recipients found for notification email')
+      return
+    }
+
+    // Prepare email data
+    const emailData = {
+      title: notification.title,
+      message: notification.message,
+      createdBy: notification.createdBy?.username || 'Campus da Terra',
+      attachmentUrl: notification.attachmentUrl,
+      attachmentFileName: notification.attachmentFileName
+    }
+
+    // Send emails
+    await sendNotificationEmail(recipientEmails, emailData)
+  } catch (error) {
+    console.error('Error in sendNotificationEmails:', error)
+    throw error
+  }
+}
 
 module.exports = router

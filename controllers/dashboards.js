@@ -1,6 +1,7 @@
 const dashboardsRouter = require('express').Router()
 const Dashboard = require('../models/dashboard')
 const Student = require('../models/student')
+const User = require('../models/user')
 const { userExtractor } = require('../utils/middleware')
 const {
   uploadPortfolio,
@@ -14,6 +15,7 @@ const {
   getSignedPDFViewUrl,
   getDownloadUrl
 } = require('../utils/cloudinary')
+const { sendDocumentUploadEmail, sendInvoiceUploadEmail } = require('../utils/emailService')
 
 dashboardsRouter.get('/:studentId', userExtractor, async (request, response) => {
   try {
@@ -251,6 +253,12 @@ dashboardsRouter.post('/:studentId/documents', userExtractor, uploadDocument.sin
     await dashboard.save()
     await dashboard.populate('studentId', 'firstName lastName')
 
+    // Send email notification asynchronously
+    sendDocumentUploadNotification(studentId, name, request.file.originalname, request.user).catch(error => {
+      console.error('Error sending document upload email:', error)
+      // Don't fail the request if email sending fails
+    })
+
     response.json(dashboard)
   } catch {
     response.status(500).json({ error: 'Failed to add document' })
@@ -356,6 +364,41 @@ dashboardsRouter.post('/:studentId/history', userExtractor, async (request, resp
   }
 })
 
+dashboardsRouter.put('/:studentId/history/:historyId', userExtractor, async (request, response) => {
+  try {
+    if (request.user.role !== 'admin') {
+      return response.status(403).json({ error: 'Only admins can update history events' })
+    }
+
+    const { studentId, historyId } = request.params
+    const { date, type, description, amount, isPaid } = request.body
+
+    const dashboard = await Dashboard.findOne({ studentId })
+    if (!dashboard) {
+      return response.status(404).json({ error: 'Dashboard not found' })
+    }
+
+    const historyEvent = dashboard.history.id(historyId)
+    if (!historyEvent) {
+      return response.status(404).json({ error: 'History event not found' })
+    }
+
+    // Update fields if provided
+    if (date !== undefined) historyEvent.date = date
+    if (type !== undefined) historyEvent.type = type
+    if (description !== undefined) historyEvent.description = description
+    if (amount !== undefined) historyEvent.amount = amount
+    if (isPaid !== undefined) historyEvent.isPaid = isPaid
+
+    await dashboard.save()
+    await dashboard.populate('studentId', 'firstName lastName')
+
+    response.json(dashboard)
+  } catch {
+    response.status(500).json({ error: 'Failed to update history event' })
+  }
+})
+
 dashboardsRouter.delete('/:studentId/history/:historyId', userExtractor, async (request, response) => {
   try {
     if (request.user.role !== 'admin') {
@@ -437,6 +480,12 @@ dashboardsRouter.post('/:studentId/history/:historyId/receipt', userExtractor, u
 
     await dashboard.save()
     await dashboard.populate('studentId', 'firstName lastName')
+
+    // Send email notification asynchronously
+    sendInvoiceUploadNotification(studentId, historyEvent, request.user).catch(error => {
+      console.error('Error sending invoice upload email:', error)
+      // Don't fail the request if email sending fails
+    })
 
     response.json(dashboard)
   } catch {
@@ -743,5 +792,123 @@ dashboardsRouter.get('/:studentId/history/:historyId/receipt/url', userExtractor
     response.status(500).json({ error: 'Internal server error' })
   }
 })
+
+/**
+ * Helper function to send document upload notification email
+ */
+async function sendDocumentUploadNotification(studentId, documentName, fileName, uploadedByUser) {
+  try {
+    // Get student and populate user to get parent email and email preferences
+    const student = await Student.findById(studentId).populate('userId', 'email name emailNotifications')
+
+    if (!student || !student.userId || !student.userId.email) {
+      console.log('No parent email found for student document upload notification')
+      return
+    }
+
+    // Check if user has email notifications enabled
+    if (student.userId.emailNotifications === false) {
+      console.log('User has disabled email notifications, skipping document upload email')
+      return
+    }
+
+    const recipientEmail = student.userId.email
+    const studentName = `${student.firstName} ${student.lastName}`
+    const uploadedBy = uploadedByUser.name || uploadedByUser.username || 'Campus da Terra Admin'
+
+    // Prepare email data
+    const emailData = {
+      studentId: studentId.toString(),
+      studentName,
+      documentName,
+      fileName,
+      uploadedBy
+    }
+
+    // Send email
+    await sendDocumentUploadEmail(recipientEmail, emailData)
+  } catch (error) {
+    console.error('Error in sendDocumentUploadNotification:', error)
+    throw error
+  }
+}
+
+// Resend invoice/receipt email
+dashboardsRouter.post('/:studentId/history/:historyId/resend-email', userExtractor, async (request, response) => {
+  try {
+    const { studentId, historyId } = request.params
+
+    // Get the dashboard and find the history event
+    const dashboard = await Dashboard.findOne({ studentId })
+    if (!dashboard) {
+      return response.status(404).json({ error: 'Dashboard not found' })
+    }
+
+    const historyEvent = dashboard.history.id(historyId)
+    if (!historyEvent) {
+      return response.status(404).json({ error: 'History event not found' })
+    }
+
+    // Check if this is an invoice or receipt type
+    if (historyEvent.type !== 'receipt' && historyEvent.type !== 'donation_receipt') {
+      return response.status(400).json({ error: 'This event is not an invoice or receipt' })
+    }
+
+    // Check if it has a file attached
+    if (!historyEvent.downloadUrl || !historyEvent.fileName) {
+      return response.status(400).json({ error: 'No invoice file found for this event' })
+    }
+
+    // Send email notification
+    await sendInvoiceUploadNotification(studentId, historyEvent, request.user)
+
+    response.json({ message: 'Invoice email resent successfully' })
+  } catch (error) {
+    console.error('Error resending invoice email:', error)
+    response.status(500).json({ error: 'Failed to resend invoice email' })
+  }
+})
+
+/**
+ * Helper function to send invoice/receipt upload notification email
+ */
+async function sendInvoiceUploadNotification(studentId, historyEvent, uploadedByUser) {
+  try {
+    // Get student and populate user to get parent email and email preferences
+    const student = await Student.findById(studentId).populate('userId', 'email name emailNotifications')
+
+    if (!student || !student.userId || !student.userId.email) {
+      console.log('No parent email found for student invoice upload notification')
+      return
+    }
+
+    // Check if user has email notifications enabled
+    if (student.userId.emailNotifications === false) {
+      console.log('User has disabled email notifications, skipping invoice upload email')
+      return
+    }
+
+    const recipientEmail = student.userId.email
+    const studentName = `${student.firstName} ${student.lastName}`
+    const uploadedBy = uploadedByUser.name || uploadedByUser.username || 'Campus da Terra Admin'
+
+    // Prepare email data
+    const emailData = {
+      studentId: studentId.toString(),
+      studentName,
+      receiptType: historyEvent.type,
+      amount: historyEvent.amount || '0',
+      fileName: historyEvent.fileName,
+      fileUrl: historyEvent.downloadUrl,
+      uploadedBy
+    }
+
+    // Send email
+    await sendInvoiceUploadEmail(recipientEmail, emailData)
+  } catch (error) {
+    console.error('Error in sendInvoiceUploadNotification:', error)
+    throw error
+  }
+}
 
 module.exports = dashboardsRouter

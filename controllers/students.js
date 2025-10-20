@@ -36,9 +36,9 @@ studentsRouter.get('/', async (request, response) => {
 
     let students
     if (user.role === 'admin' || user.role === 'tutor') {
-      students = await Student.find({}).populate('userId', { username: 1, name: 1, email: 1 })
+      students = await Student.find({ isArchived: { $ne: true } }).populate('userId', { username: 1, name: 1, email: 1 })
     } else {
-      students = await Student.find({ userId: decodedToken.id })
+      students = await Student.find({ userId: decodedToken.id, isArchived: { $ne: true } })
     }
 
     response.json(students)
@@ -1083,6 +1083,136 @@ studentsRouter.get('/:id/profile-picture', async (request, response) => {
       url: signedUrl,
       expiresAt: new Date(Date.now() + 3600 * 1000).toISOString()
     })
+  } catch (error) {
+    if (error.name === 'JsonWebTokenError') {
+      return response.status(401).json({ error: 'Token invalid' })
+    }
+    if (error.name === 'TokenExpiredError') {
+      return response.status(401).json({ error: 'Token expired' })
+    }
+    if (error.kind === 'ObjectId') {
+      return response.status(400).json({ error: 'Malformatted id' })
+    }
+    response.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Get all archived students (admin only)
+studentsRouter.get('/archived/all', async (request, response) => {
+  const token = getTokenFrom(request)
+
+  if (!token) {
+    return response.status(401).json({ error: 'Token missing' })
+  }
+
+  try {
+    const decodedToken = jwt.verify(token, process.env.SECRET)
+    if (!decodedToken.id) {
+      return response.status(401).json({ error: 'Token invalid' })
+    }
+
+    const user = await User.findById(decodedToken.id)
+    if (!user) {
+      return response.status(404).json({ error: 'User not found' })
+    }
+
+    if (user.role !== 'admin') {
+      return response.status(403).json({ error: 'Permission denied - admin access required' })
+    }
+
+    const archivedStudents = await Student.find({ isArchived: true }).populate('userId', { username: 1, name: 1, email: 1 })
+    response.json(archivedStudents)
+  } catch (error) {
+    if (error.name === 'JsonWebTokenError') {
+      return response.status(401).json({ error: 'Token invalid' })
+    }
+    if (error.name === 'TokenExpiredError') {
+      return response.status(401).json({ error: 'Token expired' })
+    }
+    response.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Archive a student (admin only)
+studentsRouter.put('/:id/archive', async (request, response) => {
+  const token = getTokenFrom(request)
+
+  if (!token) {
+    return response.status(401).json({ error: 'Token missing' })
+  }
+
+  try {
+    const decodedToken = jwt.verify(token, process.env.SECRET)
+    if (!decodedToken.id) {
+      return response.status(401).json({ error: 'Token invalid' })
+    }
+
+    const user = await User.findById(decodedToken.id)
+    if (!user) {
+      return response.status(404).json({ error: 'User not found' })
+    }
+
+    if (user.role !== 'admin') {
+      return response.status(403).json({ error: 'Permission denied - admin access required' })
+    }
+
+    const student = await Student.findById(request.params.id)
+    if (!student) {
+      return response.status(404).json({ error: 'Student not found' })
+    }
+
+    student.isArchived = true
+    await student.save()
+
+    const updatedStudent = await Student.findById(request.params.id).populate('userId', { username: 1, name: 1, email: 1 })
+    response.json(updatedStudent)
+  } catch (error) {
+    if (error.name === 'JsonWebTokenError') {
+      return response.status(401).json({ error: 'Token invalid' })
+    }
+    if (error.name === 'TokenExpiredError') {
+      return response.status(401).json({ error: 'Token expired' })
+    }
+    if (error.kind === 'ObjectId') {
+      return response.status(400).json({ error: 'Malformatted id' })
+    }
+    response.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Unarchive a student (admin only)
+studentsRouter.put('/:id/unarchive', async (request, response) => {
+  const token = getTokenFrom(request)
+
+  if (!token) {
+    return response.status(401).json({ error: 'Token missing' })
+  }
+
+  try {
+    const decodedToken = jwt.verify(token, process.env.SECRET)
+    if (!decodedToken.id) {
+      return response.status(401).json({ error: 'Token invalid' })
+    }
+
+    const user = await User.findById(decodedToken.id)
+    if (!user) {
+      return response.status(404).json({ error: 'User not found' })
+    }
+
+    if (user.role !== 'admin') {
+      return response.status(403).json({ error: 'Permission denied - admin access required' })
+    }
+
+    const student = await Student.findById(request.params.id)
+    if (!student) {
+      return response.status(404).json({ error: 'Student not found' })
+    }
+
+    student.isArchived = false
+    await student.save()
+
+    const updatedStudent = await Student.findById(request.params.id).populate('userId', { username: 1, name: 1, email: 1 })
+    response.json(updatedStudent)
   } catch (error) {
     if (error.name === 'JsonWebTokenError') {
       return response.status(401).json({ error: 'Token invalid' })

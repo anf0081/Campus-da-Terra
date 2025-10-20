@@ -6,13 +6,33 @@ const { userExtractor } = require('../utils/middleware')
 const { exportUsers, exportUsersWithStudents, exportAllData } = require('../utils/dataExport')
 const { findUserDuplicates, mergeUserData, applyMerge, importAllData } = require('../utils/dataMerge')
 
+// Password validation function
+const validatePassword = (password) => {
+  if (!password || password.length < 8) {
+    return 'Password must be at least 8 characters long'
+  }
+  if (!/[a-z]/.test(password)) {
+    return 'Password must contain at least one lowercase letter'
+  }
+  if (!/[A-Z]/.test(password)) {
+    return 'Password must contain at least one uppercase letter'
+  }
+  if (!/[0-9]/.test(password)) {
+    return 'Password must contain at least one number'
+  }
+  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+    return 'Password must contain at least one special character (!@#$%^&*(),.?":{}|<>)'
+  }
+  return null // No error
+}
+
 usersRouter.get('/', userExtractor, async (request, response) => {
   try {
     if (request.user.role !== 'admin' && request.user.role !== 'tutor') {
       return response.status(403).json({ error: 'Permission denied - admin or tutor access required' })
     }
 
-    const users = await User.find({})
+    const users = await User.find({ isArchived: { $ne: true } })
       .populate('books', { url: 1, title: 1, author: 1 })
       .populate('students')
     response.json(users)
@@ -23,10 +43,31 @@ usersRouter.get('/', userExtractor, async (request, response) => {
 
 
 usersRouter.post('/', async (request, response) => {
-  const { username, name, email, password, role, isGAMember } = request.body
+  const {
+    username,
+    name,
+    email,
+    password,
+    role,
+    isGAMember,
+    emailNotifications,
+    contactNumber,
+    parentStreetAddress,
+    parentCity,
+    parentPostalCode,
+    parentCountry,
+    parentNationality,
+    parentPassportNumber,
+    parentPassportExpiryDate,
+    parentNifNumber,
+    emergencyContactRelationship,
+    emergencyContactName,
+    emergencyContactNumber
+  } = request.body
 
-  if (!password || password.length < 3) {
-    return response.status(400).json({ error: 'Password must be at least 3 characters long.' })
+  const passwordError = validatePassword(password)
+  if (passwordError) {
+    return response.status(400).json({ error: passwordError })
   }
 
   if (!username || username.length < 3) {
@@ -56,7 +97,20 @@ usersRouter.post('/', async (request, response) => {
     email,
     passwordHash,
     role,
-    isGAMember: isGAMember || false
+    isGAMember: isGAMember || false,
+    emailNotifications: emailNotifications !== undefined ? emailNotifications : true,
+    contactNumber,
+    parentStreetAddress,
+    parentCity,
+    parentPostalCode,
+    parentCountry,
+    parentNationality,
+    parentPassportNumber,
+    parentPassportExpiryDate,
+    parentNifNumber,
+    emergencyContactRelationship,
+    emergencyContactName,
+    emergencyContactNumber
   })
 
   try {
@@ -86,6 +140,7 @@ usersRouter.put('/:id', userExtractor, async (request, response) => {
     password,
     contactNumber,
     isGAMember,
+    emailNotifications,
     parentStreetAddress,
     parentCity,
     parentPostalCode,
@@ -109,8 +164,9 @@ usersRouter.put('/:id', userExtractor, async (request, response) => {
     if (email !== undefined) updateData.email = email
 
     if (password && password.trim()) {
-      if (password.length < 3) {
-        return response.status(400).json({ error: 'Password must be at least 3 characters long.' })
+      const passwordError = validatePassword(password)
+      if (passwordError) {
+        return response.status(400).json({ error: passwordError })
       }
       const saltRounds = 10
       updateData.passwordHash = await bcrypt.hash(password, saltRounds)
@@ -132,7 +188,7 @@ usersRouter.put('/:id', userExtractor, async (request, response) => {
     if (emergencyContactRelationship !== undefined) updateData.emergencyContactRelationship = emergencyContactRelationship
     if (emergencyContactName !== undefined) updateData.emergencyContactName = emergencyContactName
     if (emergencyContactNumber !== undefined) updateData.emergencyContactNumber = emergencyContactNumber
-
+    if (emailNotifications !== undefined) updateData.emailNotifications = emailNotifications
 
     const updatedUser = await User.findByIdAndUpdate(
       request.params.id,
@@ -429,10 +485,11 @@ usersRouter.post('/import', userExtractor, async (request, response) => {
           continue
         }
 
-        if (!userData.password || userData.password.length < 3) {
+        const passwordError = validatePassword(userData.password)
+        if (passwordError) {
           results.errors.push({
             username: userData.username,
-            error: 'Password must be at least 3 characters long'
+            error: passwordError
           })
           continue
         }
@@ -606,8 +663,9 @@ usersRouter.post('/import-with-students', userExtractor, async (request, respons
       return response.status(400).json({ error: 'Username must be at least 3 characters long' })
     }
 
-    if (!userData.password || userData.password.length < 3) {
-      return response.status(400).json({ error: 'Password must be at least 3 characters long' })
+    const passwordError = validatePassword(userData.password)
+    if (passwordError) {
+      return response.status(400).json({ error: passwordError })
     }
 
     if (!userData.email) {
@@ -934,6 +992,85 @@ usersRouter.post('/clear-database', userExtractor, async (request, response) => 
       error: 'Failed to clear database',
       details: error.message
     })
+  }
+})
+
+// Get all archived users (admin only)
+usersRouter.get('/archived/all', userExtractor, async (request, response) => {
+  try {
+    if (request.user.role !== 'admin') {
+      return response.status(403).json({ error: 'Permission denied - admin access required' })
+    }
+
+    const archivedUsers = await User.find({ isArchived: true })
+      .populate('books', { url: 1, title: 1, author: 1 })
+      .populate('students')
+    response.json(archivedUsers)
+  } catch {
+    response.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Archive a user and all their students (admin only)
+usersRouter.put('/:id/archive', userExtractor, async (request, response) => {
+  try {
+    if (request.user.role !== 'admin') {
+      return response.status(403).json({ error: 'Permission denied - admin access required' })
+    }
+
+    const user = await User.findById(request.params.id)
+    if (!user) {
+      return response.status(404).json({ error: 'User not found' })
+    }
+
+    // Archive the user
+    user.isArchived = true
+    await user.save()
+
+    // Archive all students belonging to this user
+    await Student.updateMany(
+      { userId: request.params.id },
+      { $set: { isArchived: true } }
+    )
+
+    const updatedUser = await User.findById(request.params.id)
+      .populate('books', { url: 1, title: 1, author: 1 })
+      .populate('students')
+
+    response.json(updatedUser)
+  } catch (error) {
+    if (error.kind === 'ObjectId') {
+      return response.status(400).json({ error: 'Malformatted id' })
+    }
+    response.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Unarchive a user (does not unarchive students automatically)
+usersRouter.put('/:id/unarchive', userExtractor, async (request, response) => {
+  try {
+    if (request.user.role !== 'admin') {
+      return response.status(403).json({ error: 'Permission denied - admin access required' })
+    }
+
+    const user = await User.findById(request.params.id)
+    if (!user) {
+      return response.status(404).json({ error: 'User not found' })
+    }
+
+    user.isArchived = false
+    await user.save()
+
+    const updatedUser = await User.findById(request.params.id)
+      .populate('books', { url: 1, title: 1, author: 1 })
+      .populate('students')
+
+    response.json(updatedUser)
+  } catch (error) {
+    if (error.kind === 'ObjectId') {
+      return response.status(400).json({ error: 'Malformatted id' })
+    }
+    response.status(500).json({ error: 'Internal server error' })
   }
 })
 

@@ -14,10 +14,7 @@ const tokenExtractor = (request, response, next) => {
 
 const userExtractor = async (request, response, next) => {
   try {
-    let token = request.get('authorization')?.replace('Bearer ', '')
-    if (!token && request.query.token) {
-      token = request.query.token
-    }
+    const token = request.get('authorization')?.replace('Bearer ', '')
 
     if (!token) {
       return response.status(401).json({ error: 'Token missing' })
@@ -45,7 +42,17 @@ const userExtractor = async (request, response, next) => {
 const requestLogger = (request, response, next) => {
   logger.info('Method:', request.method)
   logger.info('Path:  ', request.path)
-  logger.info('Body:  ', request.body)
+
+  // Filter out sensitive fields from logs
+  const sanitizedBody = { ...request.body }
+  if (sanitizedBody.password) {
+    sanitizedBody.password = '***REDACTED***'
+  }
+  if (sanitizedBody.passwordHash) {
+    sanitizedBody.passwordHash = '***REDACTED***'
+  }
+
+  logger.info('Body:  ', sanitizedBody)
   logger.info('---')
   next()
 }
