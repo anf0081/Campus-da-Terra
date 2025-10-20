@@ -40,9 +40,23 @@ app.use(helmet({
 
 app.use(express.json())
 
+mongoose
+  .connect(config.MONGODB_URI)
+  .then(() => {
+    logger.info('connected to MongoDB')
+  })
+  .catch((error) => {
+    logger.error('error connecting to MongoDB:', error.message)
+  })
+
+// Serve static files BEFORE CORS and other middleware
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
+app.use(express.static(path.join(__dirname, 'public')))
+
 // CORS configuration - restrict to specific origins
 const allowedOrigins = [
   'https://cdt-management-app.onrender.com',
+  'https://members.campusdaterra.org',
   'http://localhost:5173',
   'http://localhost:3001'
 ]
@@ -60,21 +74,8 @@ app.use(cors({
   credentials: true
 }))
 
-mongoose
-  .connect(config.MONGODB_URI)
-  .then(() => {
-    logger.info('connected to MongoDB')
-  })
-  .catch((error) => {
-    logger.error('error connecting to MongoDB:', error.message)
-  })
-
 app.use(middleware.requestLogger)
 app.use(middleware.tokenExtractor)
-
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
-
-app.use(express.static(path.join(__dirname, 'public')))
 
 app.use('/api/books', booksRouter)
 app.use('/api/users', usersRouter)
