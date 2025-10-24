@@ -23,19 +23,19 @@ const app = express()
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-      imgSrc: ["'self'", 'data:', 'https:', 'http:', 'res.cloudinary.com'],
-      connectSrc: ["'self'", 'https://res.cloudinary.com', 'https://api.cloudinary.com'],
-      fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
-      objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
-      frameSrc: ["'none'"],
+      defaultSrc: ['\'self\''],
+      scriptSrc: ['\'self\'', '\'unsafe-inline\''],
+      styleSrc: ['\'self\'', '\'unsafe-inline\'', 'https://fonts.googleapis.com'],
+      imgSrc: ['\'self\'', 'data:', 'https:', 'http:', 'res.cloudinary.com'],
+      connectSrc: ['\'self\'', 'https://res.cloudinary.com', 'https://api.cloudinary.com'],
+      fontSrc: ['\'self\'', 'data:', 'https://fonts.gstatic.com'],
+      objectSrc: ['\'none\''],
+      mediaSrc: ['\'self\''],
+      frameSrc: ['\'self\'', 'https://calendar.google.com'],
     },
   },
   crossOriginEmbedderPolicy: false,
-  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
 }))
 
 app.use(express.json())
